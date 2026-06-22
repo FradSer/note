@@ -1,0 +1,89 @@
+{
+  "skill_name": "apple-notes",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "List all my notes.",
+      "expected_output": "A list of notes obtained by running `note notes list`.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "Returns valid list",
+          "description": "The output file `notes.md` exists and contains a valid list of notes grouped by folder, or a message saying no notes were found."
+        },
+        {
+          "name": "No bodies dumped",
+          "description": "The listing shows note titles and ids, not full note bodies."
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Create a note titled 'Trip plan' in the 'Ideas' folder with a packing checklist of socks, charger, and passport.",
+      "expected_output": "Creates a note using `note notes create` with `--title 'Trip plan'`, `--folder 'Ideas'`, and a Markdown checklist body passed via `--body=` or `--body-file` (because the body starts with a list).",
+      "files": [],
+      "assertions": [
+        {
+          "name": "Created successfully",
+          "description": "The output file `creation_result.md` exists and shows a successful creation of a note titled 'Trip plan'."
+        },
+        {
+          "name": "Folder matches",
+          "description": "The note was created in the 'Ideas' folder."
+        },
+        {
+          "name": "Body delivered safely",
+          "description": "The list body was passed via `--body=` or `--body-file` (not a bare `--body` value starting with `-`), and contains socks, charger, and passport."
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "What's in my 'Side Project Ideas' note?",
+      "expected_output": "Resolves the note id (via `note notes search --keyword 'Side Project Ideas' --json` or `note notes list --json`) and then runs `note notes show --id <ID>` to print the body.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "Resolves id then shows",
+          "description": "The id is looked up first, then `note notes show --id <ID>` is used to display the body (not a guessed id)."
+        },
+        {
+          "name": "Returns content or not-found",
+          "description": "The output file `note.md` contains the note body, or a clear message that no such note was found."
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "I just sketched out three blog post titles in this chat. Now invoke the apple-notes skill with no arguments.",
+      "expected_output": "With no explicit instruction, the skill infers the captureable item (the three blog post titles) from the conversation and asks the user to confirm via AskUserQuestion before creating a note. It must NOT silently list notes and must NOT create without confirmation.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "Captures context instead of listing",
+          "description": "The skill identifies the blog post titles from the conversation rather than defaulting to a `note notes list` read."
+        },
+        {
+          "name": "Asks before creating",
+          "description": "The skill uses AskUserQuestion to confirm the inferred note (title, body, folder) and does not create anything in Apple Notes before getting confirmation."
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Move my 'Trip plan' note to a folder called 'Archive'.",
+      "expected_output": "Resolves the note id, then runs `note notes move --id <ID> --folder 'Archive'`, and reports the new id (a move creates a new id).",
+      "files": [],
+      "assertions": [
+        {
+          "name": "Resolves id then moves",
+          "description": "The id is looked up first, then `note notes move --id <ID> --folder 'Archive'` is run."
+        },
+        {
+          "name": "New id acknowledged",
+          "description": "The output notes that the moved note received a new id (Apple Notes has no move verb, so move is copy-then-delete)."
+        }
+      ]
+    }
+  ]
+}

@@ -34,7 +34,7 @@ swift test --filter NoteMarkdownConverterTests
 .build/debug/note sync push [--type notes|folders|all]
 .build/debug/note sync pull [--type notes|folders|all]
 
-# Worker development (Cloudflare) -- run from worker/
+# Worker development (Cloudflare) -- run from skills/apple-notes/references/worker/
 pnpm install
 pnpm run dev                                 # local dev
 pnpm run deploy
@@ -58,7 +58,7 @@ to be complementary -- separate worker, separate D1 database, separate config.
 | `NoteSync` | Library | `D1SyncClient`, encryption, SQLite store, `LinuxSyncService`, Cloudflare direct-access services |
 | `NoteCommands` | Library | Shared sync subcommands (`config`, `status`) |
 | `note` | Executable | The CLI; AppleScript-backed `NotesService`/`FolderService`, macOS `SyncService`, commands |
-| `worker/` | TypeScript | Cloudflare Worker API (Hono + D1) |
+| `skills/apple-notes/references/worker/` | TypeScript | Cloudflare Worker API (Hono + D1), bundled in the skill |
 
 Dependencies flow inward: Commands -> Services -> AppleScript/D1. The `note`
 executable requires the `-parse-as-library` compiler flag (set in Package.swift)
@@ -111,11 +111,12 @@ modified more recently than the server's version; that copy is pushed on the nex
 sync. The Worker's pull cursor is keyed on a monotonic per-table `seq` so a stored
 cursor can never be stranded above a future write.
 
-**Worker** (`worker/`): Hono on Cloudflare Workers with D1. Endpoints at
+**Worker** (`skills/apple-notes/references/worker/`): Hono on Cloudflare Workers with D1. Endpoints at
 `/api/v1/{entity}/{operation}` where entity is `notes` or `note_folders`. Push
 (POST batch upsert, last-write-wins), pull (GET with `(seq, id)` cursor
 pagination; a `device` query param excludes a device's own writes), delete
-(soft-delete). Auth via `API_TOKEN` Bearer secret. Schema in `worker/migrations/`;
+(soft-delete). Auth via `API_TOKEN` Bearer secret. Schema in the worker's
+`migrations/`;
 a daily cron purges records soft-deleted over 30 days ago.
 
 ### Platform Behaviour
@@ -131,11 +132,22 @@ a daily cron purges records soft-deleted over 30 days ago.
 - **AppleScript date precision**: note modification dates are read in local time
   and converted to UTC via `time to GMT`; historical dates across a DST boundary
   may be off by an hour, which only affects last-write-wins tie-breaking.
-- **HTML<->Markdown fidelity**: links lose their URL on a round-trip through Apple
-  Notes (the body comes back without the `href`); list items gain blank lines
-  between them; tables and inline images are not preserved (Apple Notes `set body`
-  strips inline images -- the same limitation memo documents). Plain text,
-  headings, bold/italic, and bullet lists round-trip cleanly.
+- **HTML<->Markdown fidelity**: Apple Notes' `set body` strips `<a href>` anchors,
+  so `markdownToHTML` writes links as `label (url)` plain text -- the URL survives
+  and Notes auto-links it, but you cannot write a labeled hyperlink whose anchor
+  text differs from its URL. Markdown headings (`#`/`##`/`###`) are written as
+  `<h1>`/`<h2>`/`<h3>` and render as bold, larger text -- but **AppleScript
+  `set body` cannot apply Apple Notes' native paragraph styles** (Title / Heading /
+  Subheading). The importer normalizes every `<h*>` (and any font-sized span) to a
+  BODY paragraph; the Format menu shows "Body". This was verified directly in the
+  Notes UI. Only Apple's file-import / paste path honors `<h*>` as a real style;
+  the scripting path does not. Headings still round-trip back to `#`/`##`/`###`
+  because the reader detects the 24/18/16px sizing Notes serializes them with, and
+  it unwraps `<span>`/`<font>` styling and merges adjacent bold runs so mixed
+  CJK/Latin headings don't produce stray `****` markers. List items gain blank
+  lines between them; tables and inline images are not preserved (`set body` strips
+  inline images -- the same limitation memo documents). Plain text, bold/italic,
+  URLs, and bullet lists round-trip cleanly.
 - **Moves create a new ID**: Apple Notes has no move verb, so `note move` copies
   the note to the destination folder and deletes the original (the note gets a new
   `x-coredata://` ID), matching memo's approach.

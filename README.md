@@ -95,7 +95,7 @@ Worker backed by D1. Note bodies are encrypted with a key only your devices hold
 #### 1. Deploy the Worker (one-time)
 
 ```bash
-cd worker
+cd skills/apple-notes/references/worker
 pnpm install
 pnpm exec wrangler login
 cp wrangler.toml.example wrangler.toml      # copy the config template
@@ -156,7 +156,7 @@ NoteModels  ─ domain models, formatters, sync models, HTML<->Markdown converte
 NoteSync    ─ D1 HTTP client, AES-GCM encryption, SQLite store, Linux sync
 NoteCommands─ shared sync subcommands
 note        ─ CLI: AppleScript NotesService/FolderService, macOS SyncService
-worker/     ─ Cloudflare Worker (Hono + D1)
+skills/apple-notes/ ─ ready-to-use agent skill (SKILL.md) bundling the Worker
 ```
 
 See [CLAUDE.md](CLAUDE.md) for the full architecture, sync algorithm, and known
