@@ -1,7 +1,9 @@
 scopes:
     - name: src
-      description: Core application logic and business rules in Sources/; does not cover testing or skill-specific logic.
+      description: Core application logic, models, and CLI commands in Sources/; does not cover tests or skills
+    - name: tests
+      description: Unit and integration tests for core modules in Tests/; does not cover implementation code
     - name: skills
-      description: Domain-specific extensions and references in skills/; does not cover core application logic.
+      description: Domain-specific note extensions and Cloudflare worker implementations in skills/; does not cover core application logic
     - name: worker
-      description: Background sync API and database migration logic in worker/; does not cover the main Swift application.
+      description: Standalone background sync API and database migrations in worker/; does not cover the main Swift application
