@@ -1,5 +1,6 @@
 import XCTest
 
+@testable import AppleSyncKit
 @testable import NoteModels
 @testable import NoteSync
 
