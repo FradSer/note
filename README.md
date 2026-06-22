@@ -33,12 +33,26 @@ used side by side.
 
 ## Installation
 
+### Homebrew (recommended)
+
+```bash
+brew tap FradSer/brew
+brew install note
+```
+
+### Build from source
+
 ```bash
 git clone https://github.com/FradSer/note.git
 cd note
 swift build -c release
 cp .build/release/note /usr/local/bin/
 ```
+
+Tagged releases are built and published automatically by GitHub Actions
+(`.github/workflows/release.yml`): pushing a `v*` tag cross-builds macOS
+(arm64/amd64) and Linux (amd64/arm64) binaries, attaches them to the GitHub
+release, and updates the Homebrew formula.
 
 ### First Run — Grant Permission (macOS)
 
