@@ -84,6 +84,26 @@
           "description": "The output notes that the moved note received a new id (Apple Notes has no move verb, so move is copy-then-delete)."
         }
       ]
+    },
+    {
+      "id": 6,
+      "prompt": "Find my note about meditation or relaxing.",
+      "expected_output": "Does agentic retrieval: expands the fuzzy query into several bilingual keyword terms (e.g. meditation, 冥想, relax, 放松, mindfulness, 正念), runs `note notes search --keyword <term> --json` for several of them (and/or `note notes list --json`), reads the candidate bodies, and identifies the matching note. Uses no embedding/vector tooling.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "Multiple bilingual searches",
+          "description": "The agent runs more than one `note notes search` with distinct Chinese and English terms (or lists all notes) rather than a single literal keyword."
+        },
+        {
+          "name": "Reads candidates and answers",
+          "description": "The agent reads candidate note bodies (from `--json` output or `note notes show`) and reports the matching note by title/id, or a clear not-found if none match."
+        },
+        {
+          "name": "No embedding/vector tooling",
+          "description": "Retrieval uses only the existing `note` keyword commands; no embedding, vector index, or external search service is invoked."
+        }
+      ]
     }
   ]
 }

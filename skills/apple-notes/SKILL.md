@@ -47,6 +47,20 @@ All read/write commands support the `--json` flag to output results in JSON form
 
 To act on a specific note, first resolve its `id` with `note notes list --json` or `note notes search --keyword "..." --json`, then pass that id to `show`/`edit`/`move`/`delete`.
 
+### Fuzzy / semantic search (agentic retrieval)
+
+`note` has no semantic index by design — for a conceptual or fuzzy query (e.g. "我那条关于冥想的想法", "what did I write about relaxing", "the note about AI glasses interaction"), do agentic retrieval instead of relying on a single keyword:
+
+1. **Expand the query into terms in BOTH Chinese and English** — synonyms, translations, related concepts. e.g. relax -> `放松`, `冥想`, `meditation`, `正念`, `mindfulness`, `calm`.
+2. **Run `note notes search --keyword <term> --json` for several of those terms.** Each matches a case-insensitive substring of the title or body in any language, so different terms surface different notes. The `--json` output already includes the full body.
+3. For a small library, `note notes list --json` returns every note (with bodies) — skimming all titles, then reading the candidates, is often fastest.
+4. **Union + dedupe** the candidate `id`s; read the most promising bodies (already present in the `--json` output, or via `note notes show --id <ID>`).
+5. **Reason over the bodies** to pick the real match(es); answer citing note titles/ids. If nothing matches, broaden the terms or `list` and skim.
+
+Notes:
+- This is local keyword retrieval plus your own reasoning — **no embeddings, no vector index, no extra network calls**. Privacy is identical to any other `note` command: D1 stays end-to-end encrypted, and only the notes you actually read enter context.
+- Bodies often hold secrets (backup codes, API keys). Read only the notes relevant to the query; do not dump whole secret folders into context.
+
 ### Create Notes
 - Basic: `note notes create --title "Shopping"`
 - With a body (Markdown): `note notes create --title "Shopping" --body=$'- milk\n- eggs' --folder "Ideas"`
