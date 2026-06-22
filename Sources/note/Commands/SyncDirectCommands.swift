@@ -1,3 +1,4 @@
+import AppleSyncKit
 import ArgumentParser
 import Foundation
 import NoteModels
@@ -12,8 +13,8 @@ private enum DirectAccess {
   static func withNoteService<R>(
     _ body: (CloudflareNoteService) async throws -> R
   ) async throws -> R {
-    let config = try CloudflareConfig.load()
-    let client = D1SyncClient(config: config.toSyncConfig())
+    let config = try SyncConfigStore.load()
+    let client = D1SyncClient(config: config)
     let encryptor = try NoteEncryptor.fromEnvironment()
     let service = CloudflareNoteService(client: client, encryptor: encryptor)
     do {
@@ -29,8 +30,8 @@ private enum DirectAccess {
   static func withFolderService<R>(
     _ body: (CloudflareFolderService) async throws -> R
   ) async throws -> R {
-    let config = try CloudflareConfig.load()
-    let client = D1SyncClient(config: config.toSyncConfig())
+    let config = try SyncConfigStore.load()
+    let client = D1SyncClient(config: config)
     let service = CloudflareFolderService(client: client)
     do {
       let result = try await body(service)

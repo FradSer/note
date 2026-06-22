@@ -21,7 +21,7 @@ public actor SQLiteFolderService: FoldersBackend {
   }
 
   public func createFolder(name: String) async throws -> NoteFolder {
-    let now = ISO8601DateFormatter.noteISO8601.string(from: Date())
+    let now = ISO8601DateFormatter.syncISO8601.string(from: Date())
     let id = UUID().uuidString
     let folder = NoteFolder(id: id, name: name, account: nil, parent: nil)
 
@@ -38,7 +38,7 @@ public actor SQLiteFolderService: FoldersBackend {
   }
 
   public func deleteFolder(name: String) async throws {
-    let now = ISO8601DateFormatter.noteISO8601.string(from: Date())
+    let now = ISO8601DateFormatter.syncISO8601.string(from: Date())
     // Soft-delete every folder matching the name (folders are keyed by name).
     let folders = try await fetchFolders().filter { $0.name == name }
     guard !folders.isEmpty else {

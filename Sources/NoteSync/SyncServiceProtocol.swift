@@ -1,4 +1,4 @@
-import NoteModels
+import AppleSyncKit
 
 // MARK: - Sync Service Protocol
 

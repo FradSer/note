@@ -1,46 +1,14 @@
+import AppleSyncKit
 import Foundation
 import NoteModels
 
-// MARK: - Encrypted Carrier
-
-/// JSON-serializable container that carries an encrypted payload and its IV inside
-/// a single plaintext field (the Note `body`). The version tag prevents false
-/// positives when a plain body happens to be valid JSON.
-struct EncryptedCarrier: Codable, Sendable {
-  let v: Int
-  let p: String
-  let i: String
-
-  static let currentVersion = 1
-
-  init(p: String, i: String) {
-    self.v = Self.currentVersion
-    self.p = p
-    self.i = i
-  }
-
-  func toJSONString() throws -> String {
-    let data = try JSONEncoder().encode(self)
-    return String(decoding: data, as: UTF8.self)
-  }
-
-  static func fromJSON(_ json: String) -> EncryptedCarrier? {
-    guard let data = json.data(using: .utf8) else { return nil }
-    guard let carrier = try? JSONDecoder().decode(EncryptedCarrier.self, from: data) else {
-      return nil
-    }
-    guard carrier.v == currentVersion else { return nil }
-    return carrier
-  }
-}
-
 // MARK: - Note Encryptor
 
-/// Transparently end-to-end encrypts the note `body` at the D1 boundary. The
-/// Cloudflare Worker only ever stores ciphertext; titles and folder names stay
-/// plaintext so notes remain listable without the key. Encryption happens on push
-/// and decryption on pull, so the local store (Apple Notes or SQLite) always
-/// holds plaintext Markdown.
+/// Transparently end-to-end encrypts the note `body` at the D1 boundary using the
+/// shared `AppleSyncKit.EncryptionService`. The Worker only ever stores
+/// ciphertext; titles and folder names stay plaintext so notes remain listable
+/// without the key. Encryption happens on push, decryption on pull, so the local
+/// store always holds plaintext Markdown.
 public actor NoteEncryptor {
   private let encryption: EncryptionService
 
@@ -51,14 +19,12 @@ public actor NoteEncryptor {
   /// Builds an encryptor from `NOTE_ENCRYPTION_KEY`, or throws a helpful error
   /// when the key is missing or malformed.
   public static func fromEnvironment() throws -> NoteEncryptor {
-    let key = try EncryptionService.keyFromEnvironment()
+    let key = try EncryptionService.keyFromEnvironment("NOTE_ENCRYPTION_KEY")
     return NoteEncryptor(encryption: EncryptionService(key: key))
   }
 
   // MARK: - Encrypt
 
-  /// Returns a copy of each note with its body replaced by an encrypted carrier.
-  /// Notes with no body are passed through untouched.
   public func encryptNotes(_ notes: [Note]) async throws -> [Note] {
     var result: [Note] = []
     result.reserveCapacity(notes.count)
@@ -93,13 +59,8 @@ public actor NoteEncryptor {
         let decrypted = try await decryptNote(item.data)
         items.append(
           PullItem(
-            id: item.id,
-            data: decrypted,
-            deleted: item.deleted,
-            updatedAt: item.updatedAt,
-            lastModified: item.lastModified
-          )
-        )
+            id: item.id, data: decrypted, deleted: item.deleted,
+            updatedAt: item.updatedAt, lastModified: item.lastModified))
       }
     }
     return PullResponse(items: items, cursor: response.cursor, hasMore: response.hasMore)
@@ -119,7 +80,7 @@ public actor NoteEncryptor {
       return note
     }
     let aadDate = Self.aadDate(for: note)
-    let payload = try await encryption.decrypt(
+    let payload: EncryptedPayload = try await encryption.decrypt(
       carrier.p, iv: carrier.i, recordId: note.id, modifiedDate: aadDate)
     return note.with(body: .some(payload.body))
   }

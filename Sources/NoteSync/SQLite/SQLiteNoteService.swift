@@ -52,7 +52,7 @@ public actor SQLiteNoteService: NotesBackend {
   // MARK: - Create
 
   public func createNote(_ params: CreateNoteParams) async throws -> Note {
-    let now = ISO8601DateFormatter.noteISO8601.string(from: Date())
+    let now = ISO8601DateFormatter.syncISO8601.string(from: Date())
     let id = UUID().uuidString
 
     let note = Note(
@@ -81,7 +81,7 @@ public actor SQLiteNoteService: NotesBackend {
 
   public func updateNote(id: String, params: UpdateNoteParams) async throws -> Note {
     let existing = try await fetchNote(byId: id)
-    let now = ISO8601DateFormatter.noteISO8601.string(from: Date())
+    let now = ISO8601DateFormatter.syncISO8601.string(from: Date())
 
     let updated = existing.with(
       title: params.title ?? existing.title,
@@ -106,7 +106,7 @@ public actor SQLiteNoteService: NotesBackend {
 
   public func moveNote(id: String, toFolder folderName: String) async throws -> Note {
     let existing = try await fetchNote(byId: id)
-    let now = ISO8601DateFormatter.noteISO8601.string(from: Date())
+    let now = ISO8601DateFormatter.syncISO8601.string(from: Date())
     let updated = existing.with(folder: folderName, modifiedDate: .some(now))
 
     let jsonString = try Self.encode(updated)
@@ -125,7 +125,7 @@ public actor SQLiteNoteService: NotesBackend {
   // MARK: - Delete
 
   public func deleteNote(id: String) async throws {
-    let now = ISO8601DateFormatter.noteISO8601.string(from: Date())
+    let now = ISO8601DateFormatter.syncISO8601.string(from: Date())
     try connection.run(
       """
       UPDATE notes
