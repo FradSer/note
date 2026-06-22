@@ -1,0 +1,5 @@
+scopes:
+    - name: src
+      description: Core application logic and business rules located in sources/; does not cover background processing or tests.
+    - name: worker
+      description: Background task processing and job execution logic in worker/; does not cover main application logic.
