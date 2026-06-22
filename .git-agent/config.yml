@@ -1,5 +1,7 @@
 scopes:
     - name: src
-      description: Core application logic and business rules located in sources/; does not cover background processing or tests.
+      description: Core application logic and business rules in Sources/; does not cover testing or skill-specific logic.
+    - name: skills
+      description: Domain-specific extensions and references in skills/; does not cover core application logic.
     - name: worker
-      description: Background task processing and job execution logic in worker/; does not cover main application logic.
+      description: Background sync API and database migration logic in worker/; does not cover the main Swift application.
