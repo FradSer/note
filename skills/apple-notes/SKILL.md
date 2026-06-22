@@ -90,7 +90,7 @@ Sync requires three things on every device: the `NOTE_SYNC_API_URL` and `NOTE_SY
 ## Limitations & Notes
 
 - **Title = first line of body**: when you `show` a note, the body's first line is the title; this is how Apple Notes models notes.
-- **HTML <-> Markdown fidelity**: plain text, headings, bold/italic, and bullet lists round-trip cleanly. Known losses: links come back without their URL after a round-trip through Apple Notes; list items gain blank lines between them; tables and inline images are not preserved (Apple Notes' `set body` strips inline images).
+- **HTML <-> Markdown fidelity**: plain text, bold/italic, bullet lists, and URLs round-trip cleanly. Headings (`#`/`##`/`###`) render as bold/larger text but are **Body** paragraphs — AppleScript `set body` cannot apply Apple Notes' native Title/Heading/Subheading styles (it normalizes any `<h*>` to Body); they still round-trip back to `#`/`##`/`###`. Links are written as `label (url)` plain text (Apple Notes strips `<a href>` on write, so a labeled hyperlink isn't possible, but the URL survives and Notes auto-links it). List items gain blank lines between them; tables and inline images are not preserved (Apple Notes' `set body` strips inline images).
 - **Listing cost**: `note notes list` / `search` fetch every note body in one AppleScript call, so on large libraries they take a few seconds.
 - **Folders span accounts**: if you use both iCloud and "On My Mac", a default `Notes` folder can appear once per account; `folders list` shows each.
 - **Sync conflicts**: last-write-wins on the note modification timestamp. A pull never overwrites a local copy modified more recently than the server's version.
