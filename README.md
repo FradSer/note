@@ -1,6 +1,8 @@
-# note ![Swift](https://img.shields.io/badge/Swift-5.9+-F05138) ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux-lightgrey)
+# note ![Swift](https://img.shields.io/badge/Swift-6.2+-F05138) ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux-lightgrey)
 
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+**English** | [简体中文](README.zh-CN.md)
 
 A pure Swift CLI for managing Apple Notes. On macOS it reads and writes Apple
 Notes directly through AppleScript; on Linux it works against a local SQLite store
@@ -23,7 +25,7 @@ used side by side.
 
 ## Requirements
 
-- Swift 5.9 or later
+- Swift 6.2 or later (built with the Swift 6 language mode)
 - **macOS** 14.0 or later — reads and writes Apple Notes directly via AppleScript
 - **Linux** — no Apple Notes, so `note` works against a local SQLite database at
   `~/.local/share/note-sync/local.db`. Run `note sync` to populate it from
