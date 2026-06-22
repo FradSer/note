@@ -90,6 +90,17 @@ listable without the key. Encryption is applied inside the sync push/pull closur
 **Output formatting**: commands return domain models that `OutputFormatter`
 implementations render (Markdown default, JSON via `--json`).
 
+**Search**: the CLI provides only keyword search (`note notes search` --
+case-insensitive substring over title + body, returning full notes). Semantic /
+fuzzy search is intentionally **not** built into the CLI: it is an agent-side
+keyword-retrieval workflow documented in the `apple-notes` skill (the calling LLM
+expands the query into bilingual terms, runs several searches, reads candidates,
+and reasons -- like Claude Code's code search). There is **no embedding / vector /
+cloud-index code by design** -- it keeps D1 end-to-end encrypted and the corpus is
+small. If on-device semantic search is ever wanted, the deferred option is a
+**local** multilingual model with vectors as a local-only derived cache (never
+synced) -- explicitly not a cloud embedding service that would see note plaintext.
+
 ### Sync Architecture
 
 `SyncService` (macOS) and `LinuxSyncService` (other platforms) implement
