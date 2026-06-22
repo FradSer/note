@@ -7,13 +7,13 @@ import Foundation
 /// `yyyy-MM-dd HH:mm:ss` form, so values from Apple Notes and the D1 backend
 /// can be compared regardless of which side produced them.
 public enum SyncTimestamp {
-  private static let iso8601: ISO8601DateFormatter = {
+  private nonisolated(unsafe) static let iso8601: ISO8601DateFormatter = {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime]
     return formatter
   }()
 
-  private static let bare: DateFormatter = {
+  private nonisolated(unsafe) static let bare: DateFormatter = {
     let formatter = DateFormatter()
     formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
     formatter.locale = Locale(identifier: "en_US_POSIX")

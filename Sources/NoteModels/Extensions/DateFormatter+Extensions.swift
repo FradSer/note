@@ -4,7 +4,9 @@ import Foundation
 
 extension DateFormatter {
   /// Standard date-time formatter: yyyy-MM-dd HH:mm:ss
-  public static let noteDateTime: DateFormatter = {
+  /// Configured once and only used for formatting, which Foundation guarantees is
+  /// thread-safe -- so it is safe to share as an immutable global.
+  public nonisolated(unsafe) static let noteDateTime: DateFormatter = {
     let formatter = DateFormatter()
     formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
     formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -17,7 +19,7 @@ extension DateFormatter {
 
 extension ISO8601DateFormatter {
   /// ISO 8601 formatter for sync timestamps.
-  public static let noteISO8601: ISO8601DateFormatter = {
+  public nonisolated(unsafe) static let noteISO8601: ISO8601DateFormatter = {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     return formatter
