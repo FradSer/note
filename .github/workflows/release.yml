@@ -1,0 +1,134 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.platform }}-${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: darwin
+            arch: arm64
+          - os: macos-latest
+            platform: darwin
+            arch: amd64
+          - os: ubuntu-24.04
+            platform: linux
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build (macOS)
+        if: matrix.platform == 'darwin'
+        run: |
+          ARCH_FLAG=""
+          [ "${{ matrix.arch }}" = "amd64" ] && ARCH_FLAG="--arch x86_64"
+          swift build -c release $ARCH_FLAG
+          echo "BIN_PATH=$(swift build -c release $ARCH_FLAG --show-bin-path)" >> "$GITHUB_ENV"
+
+      - name: Build (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          docker run --rm \
+            -v "$PWD":/app \
+            -w /app \
+            swift:6.2-noble \
+            bash -c "swift build -c release --static-swift-stdlib"
+          echo "BIN_PATH=.build/release" >> "$GITHUB_ENV"
+
+      - name: Create archive
+        run: |
+          cp "$BIN_PATH/note" ./note
+          tar -czf note-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz note
+          rm note
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: note-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz
+          generate_release_notes: true
+
+  update-homebrew:
+    name: Update Homebrew formula
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update formula
+        env:
+          DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION=${TAG#v}
+          declare -A SHAS
+          gh release download "${TAG}" --repo ${{ github.repository }} --pattern "*.tar.gz"
+          for platform in darwin-amd64 darwin-arm64 linux-amd64 linux-arm64; do
+            SHAS[$platform]=$(sha256sum "note-${platform}.tar.gz" | cut -d' ' -f1)
+          done
+
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git clone git@github.com:FradSer/homebrew-brew.git tap
+          cd tap
+          mkdir -p Formula
+
+          cat > Formula/note.rb << FORMULA
+          class Note < Formula
+            desc "CLI tool for managing Apple Notes with Cloudflare D1 sync"
+            homepage "https://github.com/FradSer/note"
+            version "${VERSION}"
+            license "MIT"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/FradSer/note/releases/download/${TAG}/note-darwin-arm64.tar.gz"
+                sha256 "${SHAS[darwin-arm64]}"
+              else
+                url "https://github.com/FradSer/note/releases/download/${TAG}/note-darwin-amd64.tar.gz"
+                sha256 "${SHAS[darwin-amd64]}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm?
+                url "https://github.com/FradSer/note/releases/download/${TAG}/note-linux-arm64.tar.gz"
+                sha256 "${SHAS[linux-arm64]}"
+              else
+                url "https://github.com/FradSer/note/releases/download/${TAG}/note-linux-amd64.tar.gz"
+                sha256 "${SHAS[linux-amd64]}"
+              end
+            end
+
+            def install
+              bin.install "note"
+            end
+
+            test do
+              system "#{bin}/note", "--help"
+            end
+          end
+          FORMULA
+
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add Formula/note.rb
+          git commit -m "chore: update note to ${VERSION}"
+          git push
