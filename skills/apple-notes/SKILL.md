@@ -97,6 +97,8 @@ Sync notes and folders across devices through a Cloudflare D1 backend. Note **bo
 
 On macOS, sync bridges Apple Notes and D1. On Linux, sync bridges the local SQLite database and D1 — so on a fresh Linux machine, `note sync` (or `note sync pull`) is the first step before any data is available to the other commands.
 
+**What syncs.** Note bodies are end-to-end encrypted and travel as ciphertext in the sync payload; titles and folder names stay plaintext so notes remain listable without the key. Both survive a cross-device sync.
+
 Sync requires three things on every device: the `NOTE_SYNC_API_URL` and `NOTE_SYNC_API_TOKEN` environment variables (device id defaults to the hostname), **and** the shared `NOTE_ENCRYPTION_KEY` (base64, 32 bytes). Without the encryption key, folder sync still works but note sync fails with a clear error. For one-time Worker deployment and per-device setup, see [`references/cloud-sync.md`](references/cloud-sync.md); the Worker source (a snapshot of the canonical Worker shared with the `event` CLI) is bundled with this skill at `references/worker/` and pre-configured for `note`.
 
 **D1-direct subcommands** bypass local storage and read/write the cloud backend directly (decrypting/encrypting bodies transparently): `note sync notes list` / `note sync notes show --id <ID>` / `note sync notes create`, and `note sync folders list`. Use these to inspect or seed the cloud store without touching Apple Notes or the local SQLite DB.
