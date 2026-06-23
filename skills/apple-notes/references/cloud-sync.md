@@ -5,7 +5,13 @@ backed by D1. Note **bodies are end-to-end encrypted** before they leave the
 device — the Worker only ever stores ciphertext. This is a one-time setup;
 afterward you just run `note sync`.
 
-The Worker source is bundled with this skill at `references/worker/`.
+The Worker source is a snapshot of the canonical Worker in the `apple-sync-kit`
+repo, synced into this skill at `references/worker/`. The same canonical Worker
+also backs the `event` CLI — only the `ENTITIES` var and migration set differ.
+This snapshot is pre-configured for `note` (`ENTITIES="notes,note_folders"`,
+`migrations_dir="migrations/notes"`); a `note`-only user never needs the `event`
+side. To refresh the snapshot after a canonical update, run
+`./references/worker/sync-from-kit.sh`.
 
 The local side of the sync depends on the platform: macOS bridges Apple Notes
 (via AppleScript) and D1, while Linux (and other non-Apple platforms) bridges a
@@ -20,17 +26,20 @@ Run these from the bundled worker directory (`references/worker/`):
 ```bash
 pnpm install
 pnpm exec wrangler login
-cp wrangler.toml.example wrangler.toml    # copy the config template
 pnpm exec wrangler d1 create note-sync    # copy the database_id into wrangler.toml
-pnpm run db:migrate:remote                # create the D1 tables
+pnpm run db:migrate:remote                # create the D1 tables (notes set)
 openssl rand -hex 32 | pnpm exec wrangler secret put API_TOKEN   # auto-generate and set a strong shared API token
 pnpm run deploy                           # prints https://<worker>.workers.dev
 ```
 
+`wrangler.toml` is checked in with `ENTITIES="notes,note_folders"` and
+`migrations_dir="migrations/notes"` already set; only `database_id` needs
+filling in after `d1 create`.
+
 Upgrading an existing deployment: the pull cursor is keyed on a monotonic `seq`
-column added by migration `0002_seq_cursor`. After pulling new changes, re-run
-`pnpm run db:migrate:remote` then `pnpm run deploy`. Devices still holding an
-older timestamp cursor self-heal on their next pull (they restart once and
+column added by migration `0002_notes_seq_cursor`. After pulling new changes,
+re-run `pnpm run db:migrate:remote` then `pnpm run deploy`. Devices still holding
+an older timestamp cursor self-heal on their next pull (they restart once and
 re-converge), so no client action is needed.
 
 ## 2. Configure each device
