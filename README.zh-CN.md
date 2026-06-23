@@ -92,11 +92,13 @@ note folders delete --name "Work"     # 同时删除该文件夹中的笔记
 
 #### 1. 部署 Worker（一次性）
 
+Worker 源码是 canonical [apple-sync-kit/worker](https://github.com/FradSer/apple-sync-kit/tree/main/worker)
+的快照，已为 note 预配置（`ENTITIES="notes,note_folders"`）。
+
 ```bash
 cd skills/apple-notes/references/worker
 pnpm install
 pnpm exec wrangler login
-cp wrangler.toml.example wrangler.toml      # 复制配置模板
 pnpm exec wrangler d1 create note-sync      # 把 database_id 填进 wrangler.toml
 pnpm run db:migrate:remote                  # 创建 D1 数据表
 openssl rand -hex 32 | pnpm exec wrangler secret put API_TOKEN   # 设置共享 API 令牌
@@ -145,6 +147,16 @@ note sync notes show --id <ID>
 note sync folders list
 ```
 
+## Agent Skill
+
+[`apple-notes`](skills/apple-notes/) skill 可让 AI agent 通过 `note` 直接管理你的 Apple Notes。
+
+1. 确保 `note` CLI 已安装并在系统 PATH 中。
+2. 安装 skill：
+   ```bash
+   npx skills add https://github.com/FradSer/note --skill apple-notes
+   ```
+
 ## 架构
 
 ```
@@ -156,6 +168,13 @@ skills/apple-notes/ ─ 开箱即用的 agent skill（SKILL.md），内含 Worke
 ```
 
 完整的架构、同步算法和已知限制见 [CLAUDE.md](CLAUDE.md)。
+
+## 相关项目
+
+- [apple-sync-kit](https://github.com/FradSer/apple-sync-kit) — 共享的同步库和
+  canonical D1 Worker（`worker/`），驱动 `note sync`
+- [event](https://github.com/FradSer/event) — Apple 提醒事项与日历的配套 CLI；
+  同样的架构，独立的后端
 
 ## 许可证
 

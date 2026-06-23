@@ -110,11 +110,14 @@ Worker backed by D1. Note bodies are encrypted with a key only your devices hold
 
 #### 1. Deploy the Worker (one-time)
 
+The Worker source is a snapshot of the canonical
+[apple-sync-kit/worker](https://github.com/FradSer/apple-sync-kit/tree/main/worker),
+pre-configured for note (`ENTITIES="notes,note_folders"`).
+
 ```bash
 cd skills/apple-notes/references/worker
 pnpm install
 pnpm exec wrangler login
-cp wrangler.toml.example wrangler.toml      # copy the config template
 pnpm exec wrangler d1 create note-sync      # copy the database_id into wrangler.toml
 pnpm run db:migrate:remote                  # create the D1 tables
 openssl rand -hex 32 | pnpm exec wrangler secret put API_TOKEN   # set the shared API token
@@ -165,6 +168,17 @@ note sync notes show --id <ID>
 note sync folders list
 ```
 
+## Agent Skill
+
+The [`apple-notes`](skills/apple-notes/) skill lets AI agents manage your Apple
+Notes through `note`.
+
+1. Ensure `note` CLI is installed and in your system PATH.
+2. Install the skill:
+   ```bash
+   npx skills add https://github.com/FradSer/note --skill apple-notes
+   ```
+
 ## Architecture
 
 ```
@@ -177,6 +191,13 @@ skills/apple-notes/ ─ ready-to-use agent skill (SKILL.md) bundling the Worker
 
 See [CLAUDE.md](CLAUDE.md) for the full architecture, sync algorithm, and known
 limitations.
+
+## Related Projects
+
+- [apple-sync-kit](https://github.com/FradSer/apple-sync-kit) — shared sync
+  library and canonical D1 Worker (`worker/`) that powers `note sync`
+- [event](https://github.com/FradSer/event) — companion CLI for Apple
+  Reminders & Calendar; same architecture, separate backend
 
 ## License
 
