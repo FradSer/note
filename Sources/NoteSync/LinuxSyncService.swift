@@ -13,11 +13,13 @@ public actor LinuxSyncService: SyncServiceProtocol {
   private let connection: Connection
   private let syncClient: D1SyncClient
   private let encryptor: NoteEncryptor?
+  private let blacklist: FolderBlacklist
 
   public init(config: SyncConfig, database: SQLiteDatabase, encryptor: NoteEncryptor?) {
     self.connection = database.databaseConnection
     self.syncClient = D1SyncClient(config: config)
     self.encryptor = encryptor
+    self.blacklist = SyncExclusionStore.loadBlacklist()
   }
 
   public func shutdown() async throws {
@@ -38,8 +40,11 @@ public actor LinuxSyncService: SyncServiceProtocol {
   public func pushNotes() async throws -> PushResult {
     let encryptor = try requireEncryptor()
     let dbStore = self.dbStore
-    let allItems: [Note] = try dbStore.fetchNonDeleted(from: "notes")
+    let allNotes: [Note] = try dbStore.fetchNonDeleted(from: "notes")
+    let blacklistedIds = Set(allNotes.filter { blacklist.contains($0.folder) }.map(\.id))
+    let allItems = allNotes.filter { !blacklist.contains($0.folder) }
     let localOnly: [Note] = try dbStore.fetchLocalOnly(from: "notes")
+      .filter { !blacklist.contains($0.folder) }
     let deletedRecords = try dbStore.fetchDeletedRecords(from: "notes")
 
     return try await SyncEngine.pushLocalOnly(
@@ -57,13 +62,21 @@ public actor LinuxSyncService: SyncServiceProtocol {
       },
       delete: { try await self.syncClient.delete(entity: "notes", id: $0, lastModified: $1) },
       clearLocalOnly: { try dbStore.clearLocalOnly(table: "notes", ids: $0) },
-      removeRecord: { try dbStore.removeRecord(table: "notes", id: $0) })
+      // Purging an excluded note soft-deletes its remote copy but must keep the
+      // local row; only genuine deletions (not in blacklistedIds) are removed.
+      removeRecord: { id in
+        guard blacklistedIds.contains(id) == false else { return }
+        try dbStore.removeRecord(table: "notes", id: id)
+      })
   }
 
   public func pushFolders() async throws -> PushResult {
     let dbStore = self.dbStore
-    let allItems: [NoteFolder] = try dbStore.fetchNonDeleted(from: "note_folders")
+    let allFolders: [NoteFolder] = try dbStore.fetchNonDeleted(from: "note_folders")
+    let blacklistedIds = Set(allFolders.filter { blacklist.contains($0.name) }.map(\.id))
+    let allItems = allFolders.filter { !blacklist.contains($0.name) }
     let localOnly: [NoteFolder] = try dbStore.fetchLocalOnly(from: "note_folders")
+      .filter { !blacklist.contains($0.name) }
     let deletedRecords = try dbStore.fetchDeletedRecords(from: "note_folders")
 
     return try await SyncEngine.pushLocalOnly(
@@ -82,7 +95,10 @@ public actor LinuxSyncService: SyncServiceProtocol {
         try await self.syncClient.delete(entity: "note_folders", id: $0, lastModified: $1)
       },
       clearLocalOnly: { try dbStore.clearLocalOnly(table: "note_folders", ids: $0) },
-      removeRecord: { try dbStore.removeRecord(table: "note_folders", id: $0) })
+      removeRecord: { id in
+        guard blacklistedIds.contains(id) == false else { return }
+        try dbStore.removeRecord(table: "note_folders", id: id)
+      })
   }
 
   // MARK: - Pull
@@ -94,6 +110,7 @@ public actor LinuxSyncService: SyncServiceProtocol {
     let localLastModified = lastModifiedIndex(
       localNotes.map { (id: $0.id, lastModified: $0.modifiedDate, creationDate: $0.creationDate) })
     let localIds = Set(localNotes.map(\.id))
+    let blacklist = self.blacklist
 
     return try await SyncEngine.pull(
       entityName: "notes", store: SyncConfigStore.store,
@@ -107,7 +124,10 @@ public actor LinuxSyncService: SyncServiceProtocol {
       pull: { cursor in
         let response: PullResponse<Note> = try await self.syncClient.pull(
           entity: "notes", cursor: cursor)
-        return try await encryptor.decryptResponse(response)
+        // Excluded-folder notes are dropped here so the engine never records,
+        // re-creates, or deletes them locally.
+        return try await encryptor.decryptResponse(
+          blacklist.filteringPull(response) { $0.folder })
       },
       applyDelete: { try dbStore.hardDeleteRecord(table: "notes", id: $0) },
       applyUpsert: { localId, item in
@@ -119,6 +139,7 @@ public actor LinuxSyncService: SyncServiceProtocol {
 
   public func pullFolders() async throws -> PullSummary {
     let dbStore = self.dbStore
+    let blacklist = self.blacklist
     return try await SyncEngine.pull(
       entityName: "folders", store: SyncConfigStore.store,
       defaultState: SyncState(), stateKeyPath: \.noteFolders,
@@ -129,8 +150,9 @@ public actor LinuxSyncService: SyncServiceProtocol {
       localIdsWithoutTimestamp: [],
       isNotFound: NoteSyncRules.isNotFound,
       pull: { cursor in
-        try await self.syncClient.pull(entity: "note_folders", cursor: cursor)
-          as PullResponse<NoteFolder>
+        let response: PullResponse<NoteFolder> = try await self.syncClient.pull(
+          entity: "note_folders", cursor: cursor)
+        return blacklist.filteringPull(response) { $0.name }
       },
       applyDelete: { try dbStore.hardDeleteRecord(table: "note_folders", id: $0) },
       applyUpsert: { localId, item in

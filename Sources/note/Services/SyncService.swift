@@ -16,10 +16,12 @@
     private let folderService = FolderService()
     private let syncClient: D1SyncClient
     private let encryptor: NoteEncryptor?
+    private let blacklist: FolderBlacklist
 
     init(config: SyncConfig, encryptor: NoteEncryptor?) {
       self.syncClient = D1SyncClient(config: config)
       self.encryptor = encryptor
+      self.blacklist = SyncExclusionStore.loadBlacklist()
     }
 
     func shutdown() async throws {
@@ -38,6 +40,7 @@
     func pushNotes() async throws -> PushResult {
       let encryptor = try requireEncryptor()
       let notes = try await notesService.fetchNotes(folderName: nil)
+        .filter { !blacklist.contains($0.folder) }
       return try await SyncEngine.pushSnapshot(
         items: notes, getId: { $0.id }, store: SyncConfigStore.store,
         defaultState: SyncState(), stateKeyPath: \.notes,
@@ -55,6 +58,7 @@
 
     func pushFolders() async throws -> PushResult {
       let folders = try await folderService.fetchFolders()
+        .filter { !blacklist.contains($0.name) }
       return try await SyncEngine.pushSnapshot(
         items: folders, getId: { $0.id }, store: SyncConfigStore.store,
         defaultState: SyncState(), stateKeyPath: \.noteFolders,
@@ -81,6 +85,7 @@
           (id: $0.id, lastModified: $0.modifiedDate, creationDate: $0.creationDate)
         })
       let localIds = Set(localNotes.map(\.id))
+      let blacklist = self.blacklist
 
       return try await SyncEngine.pull(
         entityName: "notes", store: SyncConfigStore.store,
@@ -94,7 +99,10 @@
         pull: { cursor in
           let response: PullResponse<Note> = try await self.syncClient.pull(
             entity: "notes", cursor: cursor)
-          return try await encryptor.decryptResponse(response)
+          // Excluded-folder notes are dropped here so the engine never records,
+          // re-creates, or deletes them locally.
+          return try await encryptor.decryptResponse(
+            blacklist.filteringPull(response) { $0.folder })
         },
         applyDelete: { try await self.notesService.deleteNote(id: $0) },
         applyUpsert: { localId, item in
@@ -112,7 +120,8 @@
     }
 
     func pullFolders() async throws -> PullSummary {
-      try await SyncEngine.pull(
+      let blacklist = self.blacklist
+      return try await SyncEngine.pull(
         entityName: "folders", store: SyncConfigStore.store,
         defaultState: SyncState(), stateKeyPath: \.noteFolders,
         defaultCursors: SyncCursors(), cursorKeyPath: \.noteFolders,
@@ -124,7 +133,7 @@
         pull: { cursor in
           let response: PullResponse<NoteFolder> = try await self.syncClient.pull(
             entity: "note_folders", cursor: cursor)
-          return response
+          return blacklist.filteringPull(response) { $0.name }
         },
         applyDelete: { localId in
           let folders = try await self.folderService.fetchFolders()

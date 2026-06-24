@@ -24,7 +24,7 @@ struct SyncCommands: AsyncParsableCommand {
     abstract: "Sync notes with Cloudflare D1",
     subcommands: [
       FullSync.self, Push.self, Pull.self, SyncConfigCommand.self, SyncStatusCommand.self,
-      SyncNotesCommands.self, SyncFoldersCommands.self,
+      SyncExcludeCommand.self, SyncNotesCommands.self, SyncFoldersCommands.self,
     ],
     defaultSubcommand: FullSync.self
   )

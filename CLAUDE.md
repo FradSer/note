@@ -117,6 +117,34 @@ Setting exactly one of the two required env vars is an error. Sync state lives i
 `id-mapping.json` (local<->remote), `state.json` -- all mode `0o600`. API URL must
 be HTTPS.
 
+**Folder blacklist**: `SyncExclusionStore` (NoteSync) loads a set of excluded
+folder names from `NOTE_SYNC_EXCLUDE_FOLDERS` (comma/newline-separated) unioned
+with `~/.config/note-sync/exclude.json`; `FolderBlacklist` (NoteModels) matches
+case-insensitively after trimming. Both `SyncService` and `LinuxSyncService` load
+it once at init and apply it on both directions:
+- **Push** filters blacklisted notes/folders out of the snapshot, so the engine's
+  deletion-candidate path purges any copy already on D1, exactly once (after the
+  purge the remote id leaves `knownRemoteIds`, so it does not re-fire). On Linux,
+  `pushLocalOnly`'s `removeRecord` callback is guarded so the purge **never
+  hard-deletes the local SQLite row** of a blacklisted note (`pushSnapshot` on
+  macOS has no such callback, so Apple Notes is unaffected).
+- **Pull** drops blacklisted items at the boundary via `FolderBlacklist.filteringPull`
+  inside the `pull:` closure (before decrypt), preserving the cursor/`hasMore`. The
+  engine therefore never sees them: it cannot create them locally, delete a local
+  copy via a tombstone, or record them as known remote ids (which would later make
+  them deletion candidates and purge them from other devices). This is why the
+  filter lives in the closure, not in `applyUpsert`/`applyDelete` — those run after
+  the engine has already recorded state. Since an Apple Notes move creates a new id
+  (a note's folder is immutable per id), server-folder filtering is equivalent to
+  local-folder protection, so no separate `protectedIds` set is needed.
+
+Moving a note out of an excluded folder makes it resume syncing on the next push;
+moving one in purges it from D1. **Purge propagates**: because it soft-deletes the
+cloud copy, any other device that syncs and has not excluded the same folder will
+delete its local copy on the next pull — so set the same blacklist on every device.
+Manage with `note sync exclude {list,add,remove}`; `note sync status` shows the
+effective set.
+
 **Conflict resolution**: last-write-wins. A pull never overwrites a local copy
 modified more recently than the server's version; that copy is pushed on the next
 sync. The Worker's pull cursor is keyed on a monotonic per-table `seq` so a stored
