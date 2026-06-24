@@ -64,6 +64,14 @@ env vars are unset, `note` falls back to a config file written by
 encryption key is **never** written to disk by `note`; it lives only in
 `NOTE_ENCRYPTION_KEY`.
 
+### Headless / systemd services
+
+Shell profiles (`~/.bashrc`, `~/.zshrc`) only affect interactive shells. If
+`note` runs inside a systemd-managed service (e.g. an agent gateway), the
+service process inherits **none** of those exports. See
+[Systemd Deployment](references/docs/systemd-deployment.md) for the full setup
+(env file + systemd drop-in).
+
 ## 3. Sync
 
 ```bash
@@ -74,6 +82,39 @@ Run it on each device. The device id (hostname by default) keeps devices
 distinct, and a device never pulls back its own writes. On Linux, run this first
 on a new machine to populate the local SQLite database before reading data with
 the other `note` commands.
+
+## 4. Exclude sensitive folders (optional)
+
+Some folders should never leave the device — note bodies are encrypted on D1, but
+titles and folder names are stored plaintext, so a "Private" folder's note titles
+would otherwise be visible server-side. Blacklist such folders by name:
+
+```bash
+note sync exclude add Private        # persists to ~/.config/note-sync/exclude.json
+note sync exclude list               # show the effective blacklist
+note sync exclude remove Private
+note sync status                     # "Excluded folders:" lists the effective set
+```
+
+The effective blacklist is the union of `exclude.json` and the
+`NOTE_SYNC_EXCLUDE_FOLDERS` environment variable (comma- or newline-separated),
+matched case-insensitively. On every sync:
+
+- notes in an excluded folder (and the folder itself) are filtered out of push, so
+  they are never uploaded;
+- any copy already on D1 is purged (soft-deleted) on the next push — once;
+- on the device that holds the blacklist, the local copy is always kept: pulled
+  items in an excluded folder are dropped before the sync engine sees them, so they
+  are never re-created and the purge tombstone never deletes the local copy.
+
+Move a note out of an excluded folder and it resumes syncing on the next push;
+move one in and it is purged from the cloud.
+
+**Set the same blacklist on every device.** Exclusion is enforced locally per
+device, and purging soft-deletes the cloud copy — so any *other* device that syncs
+and has not excluded the same folder will delete its local copy when it pulls the
+tombstone. Keeping the blacklist identical across devices avoids surprising
+deletions.
 
 ## Notes
 
