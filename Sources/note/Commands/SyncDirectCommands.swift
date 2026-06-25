@@ -11,35 +11,23 @@ import NoteSync
 /// are decrypted on read and encrypted on write using NOTE_ENCRYPTION_KEY.
 private enum DirectAccess {
   static func withNoteService<R>(
-    _ body: (CloudflareNoteService) async throws -> R
+    _ body: @Sendable (CloudflareNoteService) async throws -> R
   ) async throws -> R {
     let config = try SyncConfigStore.load()
-    let client = D1SyncClient(config: config)
-    let encryptor = try NoteEncryptor.fromEnvironment()
-    let service = CloudflareNoteService(client: client, encryptor: encryptor)
-    do {
-      let result = try await body(service)
-      try await client.shutdown()
-      return result
-    } catch {
-      try? await client.shutdown()
-      throw error
+    return try await D1SyncClient.withClient(config: config) { client in
+      let encryptor = try NoteEncryptor.fromEnvironment()
+      let service = CloudflareNoteService(client: client, encryptor: encryptor)
+      return try await body(service)
     }
   }
 
   static func withFolderService<R>(
-    _ body: (CloudflareFolderService) async throws -> R
+    _ body: @Sendable (CloudflareFolderService) async throws -> R
   ) async throws -> R {
     let config = try SyncConfigStore.load()
-    let client = D1SyncClient(config: config)
-    let service = CloudflareFolderService(client: client)
-    do {
-      let result = try await body(service)
-      try await client.shutdown()
-      return result
-    } catch {
-      try? await client.shutdown()
-      throw error
+    return try await D1SyncClient.withClient(config: config) { client in
+      let service = CloudflareFolderService(client: client)
+      return try await body(service)
     }
   }
 
