@@ -162,6 +162,72 @@ public actor LinuxSyncService: SyncServiceProtocol {
       })
   }
 
+  // MARK: - Preferences (file as local store, same as macOS)
+
+  // Linux uses the same preferences JSON file as macOS — `prefs` commands hit
+  // the file directly, so the file IS the local store. pushSnapshot/pull (not
+  // pushLocalOnly) fit because the file is a complete snapshot, not a DB with
+  // local-only flags.
+
+  public func pushPreferences() async throws -> PushResult {
+    // File contents only — env overrides are per-shell and never pushed to D1.
+    let prefs = NotePreferencesStore.filePreferences()
+    let snapshot = NotePreferencesSnapshot(id: "default", folders: prefs.folders)
+    let isEmpty = prefs.folders.isEmpty
+    return try await SyncEngine.pushSnapshot(
+      items: [snapshot], getId: { $0.id }, store: SyncConfigStore.store,
+      defaultState: SyncState(), stateKeyPath: \.preferences,
+      defaultMapping: SyncIdMapping(), mappingKeyPath: \.preferences,
+      volatileKeys: preferencesSnapshotVolatileKeys,
+      deletionCandidates: { _, _ in
+        // See SyncService.pushPreferences: an empty local map tombstones the
+        // remote "default" row so "no preferences" propagates as a delete.
+        isEmpty ? ["default"] : []
+      },
+      push: { items, overrides, lastModified in
+        try await self.syncClient.push(
+          entity: "note_preferences", items: items, id: { $0.id },
+          idOverrides: overrides, lastModifiedByRemoteId: lastModified)
+      },
+      delete: {
+        try await self.syncClient.delete(entity: "note_preferences", id: $0, lastModified: $1)
+      })
+  }
+
+  public func pullPreferences() async throws -> PullSummary {
+    // Local "last modified" is the file mtime so a local `prefs add` is not
+    // overwritten by a stale-but-newer remote.
+    let localLastModified: [String: String]
+    if let mtime = NotePreferencesStore.fileModificationDate() {
+      localLastModified = ["default": ISO8601DateFormatter.syncISO8601.string(from: mtime)]
+    } else {
+      localLastModified = [:]
+    }
+    let localIdsWithoutTimestamp: Set<String> =
+      localLastModified.isEmpty ? ["default"] : []
+    return try await SyncEngine.pull(
+      entityName: "preferences", store: SyncConfigStore.store,
+      defaultState: SyncState(), stateKeyPath: \.preferences,
+      defaultCursors: SyncCursors(), cursorKeyPath: \.preferences,
+      defaultMapping: SyncIdMapping(), mappingKeyPath: \.preferences,
+      volatileKeys: preferencesSnapshotVolatileKeys,
+      localLastModifiedById: localLastModified,
+      localIdsWithoutTimestamp: localIdsWithoutTimestamp,
+      isNotFound: NoteSyncRules.isNotFound,
+      pull: { cursor in
+        let response: PullResponse<NotePreferencesSnapshot> = try await self.syncClient.pull(
+          entity: "note_preferences", cursor: cursor)
+        return response
+      },
+      applyDelete: { _ in
+        try NotePreferencesStore.save(NotePreferences(folders: [:]))
+      },
+      applyUpsert: { _, item in
+        try NotePreferencesStore.save(NotePreferences(folders: item.data.folders))
+        return nil
+      })
+  }
+
   // MARK: - Helpers
 
   private nonisolated func lastModifiedIndex(

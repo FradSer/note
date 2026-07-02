@@ -7,6 +7,9 @@
 #
 # Your filled-in `wrangler.toml` (database_id, ENTITIES, migrations_dir) is
 # preserved across re-fetches; everything else is overwritten from canonical.
+#
+# The kit ships no business migrations — note owns its own under
+# references/migrations/. This script fetches only the Worker runtime (src/).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
@@ -56,9 +59,9 @@ rsync -a --delete \
   --exclude 'pnpm-lock.yaml' \
   "$KIT_DIR/" "$DEST/"
 
-# The canonical test suite targets the kit repo's shared wrangler.toml (all five
-# entities) and does not pass against a narrower consumer config. Drop it here;
-# run tests in the kit repo instead.
+# The canonical test suite targets the kit repo's entity-agnostic runtime
+# (a synthetic kit_test_items fixture table) and is not consumer-relevant.
+# Drop it here; run tests in the kit repo instead.
 rm -rf "$DEST/test"
 
 echo "Done. Next: cd worker && pnpm install && pnpm exec wrangler deploy"

@@ -8,7 +8,9 @@ import AppleSyncKit
 public protocol SyncServiceProtocol: Sendable {
   func pushNotes() async throws -> PushResult
   func pushFolders() async throws -> PushResult
+  func pushPreferences() async throws -> PushResult
   func pullNotes() async throws -> PullSummary
   func pullFolders() async throws -> PullSummary
+  func pullPreferences() async throws -> PullSummary
   func shutdown() async throws
 }

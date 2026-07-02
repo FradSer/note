@@ -147,7 +147,8 @@ public struct SyncStatusCommand: AsyncParsableCommand {
     print("Excluded folders: \(excluded.isEmpty ? "none" : excluded.joined(separator: ", "))")
     print("")
     print("Last sync cursors:")
-    print("  Notes:   \(cursors.notes ?? "never")")
-    print("  Folders: \(cursors.noteFolders ?? "never")")
+    print("  Notes:       \(cursors.notes ?? "never")")
+    print("  Folders:     \(cursors.noteFolders ?? "never")")
+    print("  Preferences: \(cursors.preferences ?? "never")")
   }
 }

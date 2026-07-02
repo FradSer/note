@@ -7,11 +7,12 @@ afterward you just run `note sync`.
 
 The Worker is the canonical one in the `apple-sync-kit` repo; the same Worker
 also backs the `event` CLI. The recommended setup is **one shared Worker + one
-D1 serving all five tables** (`notes`, `note_folders`, `reminders`,
-`calendar_events`, `reminder_lists`), with both CLIs pointed at the same URL and
-token. This skill does not bundle the Worker source — when you need to deploy,
-`./references/fetch-worker.sh` pulls it into a gitignored `references/worker/`
-scratch directory.
+D1 serving every table** for both CLIs, pointed at the same URL and token. The
+kit ships only the entity-agnostic runtime — **note owns its own table schemas
+and migrations** under `references/migrations/` (`notes`, `note_folders`,
+`note_preferences`). When you need to deploy, `./references/fetch-worker.sh`
+pulls the Worker runtime into a gitignored `references/worker/` scratch
+directory.
 
 The local side of the sync depends on the platform: macOS bridges Apple Notes
 (via AppleScript) and D1, while Linux (and other non-Apple platforms) bridges a
@@ -28,25 +29,37 @@ step 2.
 Otherwise fetch the canonical Worker and deploy it once for both CLIs:
 
 ```bash
-./references/fetch-worker.sh              # pulls the canonical Worker into references/worker/
+./references/fetch-worker.sh              # pulls the Worker runtime into references/worker/
 cd references/worker && pnpm install
 pnpm exec wrangler login
 pnpm exec wrangler d1 create apple-sync   # copy the database_id into wrangler.toml
-cp wrangler.toml.example wrangler.toml    # defaults to all five tables + migrations/all
-# fill in database_id in wrangler.toml (ENTITIES + migrations_dir already set for the shared setup)
-pnpm run db:migrate:remote                # one pass: creates all five tables
+cp wrangler.toml.example wrangler.toml
+# In wrangler.toml set:
+#   ENTITIES        = "notes,note_folders,note_preferences"
+#   migrations_dir  = "../migrations"          # <- note's own schemas (references/migrations/)
+#   database_id     = <from the create output>
+pnpm run db:migrate:remote                # creates note's three tables
 openssl rand -hex 32 | pnpm exec wrangler secret put API_TOKEN   # auto-generate and set a strong shared API token
 pnpm run deploy                           # prints https://<worker>.workers.dev
 ```
 
-For a `note`-only deployment, set `ENTITIES="notes,note_folders"` and
-`migrations_dir="migrations/notes"` in `wrangler.toml` before migrating.
+The `migrations_dir` points at note's `references/migrations/` (relative to the
+`references/worker/` scratch dir, that's `../migrations`). The kit no longer
+ships business migrations — note owns all three of its tables.
 
-Upgrading an existing deployment: the pull cursor is keyed on a monotonic `seq`
-column added by migration `0002_notes_seq_cursor`. After pulling new changes,
-re-run `pnpm run db:migrate:remote` then `pnpm run deploy`. Devices still holding
-an older timestamp cursor self-heal on their next pull (they restart once and
-re-converge), so no client action is needed.
+**Shared note + event D1.** If `event` also uses this Worker, merge event's
+migrations into the same `migrations_dir` (namespaced filenames like
+`0001_note_*`, `0001_event_*` avoid collisions in D1's `d1_migrations` table)
+and add event's entities to `ENTITIES`. See the kit Worker's `README.md` for the
+merge convention; the `event` repo documents its own migration set.
+
+Upgrading an existing deployment: after pulling new changes, re-run
+`pnpm run db:migrate:remote` then `pnpm run deploy`. New migration files (e.g.
+`0003_note_preferences_*`) create their tables; existing `0001`/`0002` files are
+`CREATE TABLE IF NOT EXISTS` / `ALTER ADD COLUMN`-safe, so re-applying them is a
+no-op against already-migrated tables. Devices still holding an older timestamp
+cursor self-heal on their next pull (they restart once and re-converge), so no
+client action is needed for the cursor column.
 
 ## 2. Configure each device
 
@@ -145,6 +158,28 @@ deletions.
 - A move creates a new note id (Apple Notes has no move verb), so a moved note
   syncs as a delete of the old id plus a create of the new one.
 - A daily cron on the Worker purges records soft-deleted over 30 days ago.
-- Entities: the Worker exposes `notes` and `note_folders`. Auth is a Bearer
-  token (`API_TOKEN`). Endpoints live at `/api/v1/{entity}/{push|pull}` and
-  `DELETE /api/v1/{entity}/{id}`.
+- Entities: the Worker exposes `notes`, `note_folders`, and `note_preferences`.
+  Auth is a Bearer token (`API_TOKEN`). Endpoints live at
+  `/api/v1/{entity}/{push|pull}` and `DELETE /api/v1/{entity}/{id}`.
+
+## Preferences sync
+
+`note prefs` (category→folder routing, e.g. `ideas`->`Ideas`) also syncs. The
+whole mapping is stored as a single D1 row (`id = "default"`) in
+`note_preferences` and round-trips through `note sync` like any other entity.
+Plaintext — it holds only folder names, the same sensitivity as `note_folders`.
+
+- **Whole-map last-write-wins.** The entire `folders` map is replaced on each
+  push. If two devices each add a different category concurrently, the later
+  push wins and the other device's category is dropped on its next pull.
+  Preferences are tiny and rarely edited on two devices at once, so this is
+  accepted; if you edit on one device at a time you will never hit it.
+- **Env overrides do not sync.** `NOTE_PREFERENCES_FOLDERS` is a per-shell
+  override read only by the local `note prefs` commands; only the
+  `preferences.json` file contents are pushed/pulled.
+- **Local-newer check uses file mtime.** A local `prefs add` bumps the file's
+  modification time, so a subsequent pull skips a remote row that is older than
+  your local edit (and your edit is pushed on the next sync). Because the file
+  mtime has sub-second resolution while the server timestamp is second-granularity,
+  a no-op pull may report `Preferences: skipped 1` — harmless (the data matches
+  and the cursor still advances).

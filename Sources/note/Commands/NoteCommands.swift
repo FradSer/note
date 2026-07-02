@@ -1,6 +1,7 @@
 import ArgumentParser
 import Foundation
 import NoteModels
+import NoteSync
 
 // MARK: - Note Commands
 
@@ -70,16 +71,40 @@ struct NoteCommands: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Folder name (created if missing)")
     var folder: String?
 
+    @Option(
+      name: .shortAndLong,
+      help: """
+        Category key resolved to a folder via ~/.config/note-sync/preferences.json \
+        (e.g. ideas -> Ideas). Ignored when --folder is given.
+        """)
+    var category: String?
+
     @Flag(help: "Output in JSON format")
     var json = false
 
     func run() async throws {
       let resolvedBody = try Self.resolveBody(body: body, bodyFile: bodyFile)
+      let resolvedFolder = try Self.resolveFolder(folder: folder, category: category)
       let backend = try await BackendFactory.makeNotesBackend()
       let note = try await backend.createNote(
-        CreateNoteParams(title: title, body: resolvedBody, folderName: folder))
+        CreateNoteParams(title: title, body: resolvedBody, folderName: resolvedFolder))
       let formatter: OutputFormatter = json ? JSONFormatter() : MarkdownFormatter()
       print(formatter.format(note))
+    }
+
+    /// Resolves the destination folder: explicit `--folder` wins; otherwise the
+    /// `--category` key is looked up in user preferences. Throws when a category
+    /// is given but has no mapping (so a typo does not silently land in Notes).
+    static func resolveFolder(folder: String?, category: String?) throws -> String? {
+      if let folder, !folder.isEmpty { return folder }
+      guard let category, !category.isEmpty else { return nil }
+      let prefs = NotePreferencesStore.load()
+      guard let mapped = prefs.folder(for: category) else {
+        throw NoteCLIError.invalidInput(
+          "No folder mapped for category '\(category)'. "
+            + "Run 'note prefs add \(category) <Folder>' or pass --folder.")
+      }
+      return mapped
     }
 
     static func resolveBody(body: String?, bodyFile: String?) throws -> String? {

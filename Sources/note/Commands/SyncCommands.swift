@@ -10,10 +10,12 @@ import NoteSync
 enum SyncEntityType: String, ExpressibleByArgument, CaseIterable {
   case notes
   case folders
+  case preferences
   case all
 
-  /// Folders are pulled before notes so a note's folder exists when it lands.
-  static let fullPullOrder: [SyncEntityType] = [.folders, .notes]
+  /// Folders are pulled before notes so a note's folder exists when it lands;
+  /// preferences have no data dependency and pull last.
+  static let fullPullOrder: [SyncEntityType] = [.folders, .notes, .preferences]
 }
 
 // MARK: - Sync Commands
@@ -44,7 +46,9 @@ struct SyncCommands: AsyncParsableCommand {
 
         Advanced subcommands (run 'note sync <name> --help'): 'push' and 'pull' \
         for one-directional sync; 'config' and 'status' to manage configuration; \
-        'notes' and 'folders' to read or write Cloudflare D1 data directly.
+        'notes' and 'folders' to read or write Cloudflare D1 data directly. \
+        Preferences (category->folder routing) sync as the 'note_preferences' \
+        entity, alongside notes and folders.
         """
     )
 
@@ -142,9 +146,12 @@ func runPush(_ service: any SyncServiceProtocol, type: SyncEntityType) async thr
     output["notes"] = try await service.pushNotes()
   case .folders:
     output["folders"] = try await service.pushFolders()
+  case .preferences:
+    output["preferences"] = try await service.pushPreferences()
   case .all:
     output["folders"] = try await service.pushFolders()
     output["notes"] = try await service.pushNotes()
+    output["preferences"] = try await service.pushPreferences()
   }
   return output
 }
@@ -159,6 +166,8 @@ func runPull(_ service: any SyncServiceProtocol, type: SyncEntityType) async thr
     output["notes"] = try await service.pullNotes()
   case .folders:
     output["folders"] = try await service.pullFolders()
+  case .preferences:
+    output["preferences"] = try await service.pullPreferences()
   case .all:
     for entity in SyncEntityType.fullPullOrder {
       switch entity {
@@ -166,6 +175,8 @@ func runPull(_ service: any SyncServiceProtocol, type: SyncEntityType) async thr
         output["folders"] = try await service.pullFolders()
       case .notes:
         output["notes"] = try await service.pullNotes()
+      case .preferences:
+        output["preferences"] = try await service.pullPreferences()
       case .all:
         break
       }
@@ -190,14 +201,18 @@ private func printJSON<T: Encodable>(_ value: T) {
 }
 
 private func pushLines(_ output: [String: PushResult]) -> [String] {
-  let labels: [(String, String)] = [("folders", "Folders"), ("notes", "Notes")]
+  let labels: [(String, String)] = [
+    ("folders", "Folders"), ("notes", "Notes"), ("preferences", "Preferences"),
+  ]
   return labels.compactMap { key, label in
     output[key].map { "\(label): synced \($0.synced), skipped \($0.skipped)" }
   }
 }
 
 private func pullLines(_ output: [String: PullSummary]) -> [String] {
-  let labels: [(String, String)] = [("folders", "Folders"), ("notes", "Notes")]
+  let labels: [(String, String)] = [
+    ("folders", "Folders"), ("notes", "Notes"), ("preferences", "Preferences"),
+  ]
   return labels.compactMap { key, label in
     output[key].map {
       "\(label): pulled \($0.pulled), deleted \($0.deleted), skipped \($0.skipped)"

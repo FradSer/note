@@ -34,6 +34,13 @@ swift test --filter NoteMarkdownConverterTests
 .build/debug/note sync push [--type notes|folders|all]
 .build/debug/note sync pull [--type notes|folders|all]
 
+# Preferences (category -> folder routing)
+.build/debug/note prefs add ideas Ideas      # map a category to a folder
+.build/debug/note prefs list [--json]
+.build/debug/note prefs get ideas            # show folder for a category (incl. env)
+.build/debug/note prefs remove ideas
+.build/debug/note notes create --title "X" --category ideas   # resolves folder via prefs
+
 # Worker development (Cloudflare) -- run from skills/apple-notes/references/worker/
 pnpm install
 pnpm run dev                                 # local dev
@@ -150,13 +157,16 @@ modified more recently than the server's version; that copy is pushed on the nex
 sync. The Worker's pull cursor is keyed on a monotonic per-table `seq` so a stored
 cursor can never be stranded above a future write.
 
-**Worker** (`skills/apple-notes/references/worker/`): Hono on Cloudflare Workers with D1. Endpoints at
-`/api/v1/{entity}/{operation}` where entity is `notes` or `note_folders`. Push
-(POST batch upsert, last-write-wins), pull (GET with `(seq, id)` cursor
-pagination; a `device` query param excludes a device's own writes), delete
-(soft-delete). Auth via `API_TOKEN` Bearer secret. Schema in the worker's
-`migrations/`;
-a daily cron purges records soft-deleted over 30 days ago.
+**Worker** (`skills/apple-notes/references/worker/`): Hono on Cloudflare Workers with D1, the
+entity-agnostic runtime from `apple-sync-kit` (the kit ships no business schema). Endpoints at
+`/api/v1/{entity}/{operation}` where entity is `notes`, `note_folders`, or `note_preferences`.
+Push (POST batch upsert, last-write-wins), pull (GET with `(seq, id)` cursor pagination; a `device`
+query param excludes a device's own writes), delete (soft-delete). Auth via `API_TOKEN` Bearer
+secret. **note owns its own schema** under `skills/apple-notes/references/migrations/`
+(`0001_note_notes_initial_schema`, `0002_note_notes_seq_cursor`,
+`0003_note_preferences_initial_schema`, `0004_note_preferences_seq_cursor`); the deployment's
+`wrangler.toml` points `migrations_dir` there. Preferences sync as a single row (id `default`,
+whole-map LWW, plaintext). A daily cron purges records soft-deleted over 30 days ago.
 
 ### Platform Behaviour
 

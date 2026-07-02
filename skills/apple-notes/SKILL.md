@@ -86,6 +86,20 @@ Notes:
 - Create a folder: `note folders create --name "Work"`
 - Delete a folder by name: `note folders delete --name "Work"` (also deletes the notes inside it)
 
+## Preferences (category-to-folder routing)
+
+Map a free-form category (e.g. "ideas", "work", "invoice") to the Apple Notes folder a note in that category should land in, so the caller doesn't have to spell the folder each time. Persisted in `~/.config/note-sync/preferences.json` (mode `0o600`, alongside the sync config and exclude list). Preferences also **sync to D1** as the `note_preferences` entity on `note sync` — the whole map is one row (id `default`), plaintext (folder names only), last-write-wins at map granularity. The `NOTE_PREFERENCES_FOLDERS` env var is a local per-shell override and is never synced; only the file contents are.
+
+- Map a category: `note prefs add ideas Ideas` (re-mapping updates in place)
+- List mappings: `note prefs list` (`--json` for machine-readable output)
+- Show the folder for one category: `note prefs get ideas` (`--json`)
+- Remove a mapping: `note prefs remove ideas`
+- Create a note via category: `note notes create --title "Side project X" --body-file ./idea.md --category ideas` — resolves `ideas` -> `Ideas` and creates the note there. `--folder` wins if both are given; an unknown `--category` throws a clear error rather than silently landing in the default folder.
+
+Category keys match case-insensitively and are trimmed on lookup; folder values are used verbatim (Apple Notes folders are case-sensitive on creation). The `NOTE_PREFERENCES_FOLDERS` environment variable (`cat1:Folder1,cat2:Folder2`) layers overrides on top at read time — useful for per-shell or per-machine routing without touching the file.
+
+**Agentic usage.** When the user says something like "save this idea" without naming a folder, infer the category from the content (an insight/idea -> `ideas`, a task for a project -> the project name, a meeting write-up -> `meetings`, etc.), check `note prefs list` to see what categories are configured, and prefer `--category` over `--folder` so the user's routing table stays the single source of truth. If the inferred category isn't mapped, ask which folder to use (and offer to `note prefs add` it for next time) rather than guessing.
+
 ## Cloud Sync
 
 Sync notes and folders across devices through a Cloudflare D1 backend. Note **bodies are end-to-end encrypted** before they leave the device; titles and folder names stay plaintext so notes remain listable without the key.

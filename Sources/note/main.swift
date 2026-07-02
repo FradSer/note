@@ -12,6 +12,7 @@ struct NoteCLI: AsyncParsableCommand {
       NoteCommands.self,
       FolderCommands.self,
       SyncCommands.self,
+      PreferencesCommand.self,
     ]
   )
 }
