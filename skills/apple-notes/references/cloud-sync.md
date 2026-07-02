@@ -179,7 +179,9 @@ Plaintext — it holds only folder names, the same sensitivity as `note_folders`
   `preferences.json` file contents are pushed/pulled.
 - **Local-newer check uses file mtime.** A local `prefs add` bumps the file's
   modification time, so a subsequent pull skips a remote row that is older than
-  your local edit (and your edit is pushed on the next sync). Because the file
-  mtime has sub-second resolution while the server timestamp is second-granularity,
-  a no-op pull may report `Preferences: skipped 1` — harmless (the data matches
+  your local edit (and your edit is pushed on the next sync). On a device with
+  no preferences file yet, the first pull applies the remote row (no local
+  timestamp to compare, so it writes the file). Because the file mtime has
+  sub-second resolution while the server timestamp is second-granularity, a
+  no-op pull may report `Preferences: skipped 1` — harmless (the data matches
   and the cursor still advances).

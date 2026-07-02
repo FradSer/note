@@ -203,8 +203,7 @@ public actor LinuxSyncService: SyncServiceProtocol {
     } else {
       localLastModified = [:]
     }
-    let localIdsWithoutTimestamp: Set<String> =
-      localLastModified.isEmpty ? ["default"] : []
+    let localIdsWithoutTimestamp: Set<String> = []
     return try await SyncEngine.pull(
       entityName: "preferences", store: SyncConfigStore.store,
       defaultState: SyncState(), stateKeyPath: \.preferences,
